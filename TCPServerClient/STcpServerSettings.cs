@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 namespace TcpServerClient
 {
 	/// <summary>
-	/// SimpleTcp server settings.
+	/// TcpServer settings.
 	/// </summary>
-	public class TcpServerSettings
+	public class STcpServerSettings
 	{
 		#region Public-Members
 
@@ -65,7 +65,7 @@ namespace TcpServerClient
 		/// <summary>
 		/// Instantiate the object.
 		/// </summary>
-		public TcpServerSettings()
+		public STcpServerSettings()
 		{
 
 		}

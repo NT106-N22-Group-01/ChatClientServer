@@ -4,28 +4,28 @@ using System.Net.Sockets;
 
 namespace TcpServerClient
 {
-	public class TcpServer : IDisposable
+	public class STcpServer : IDisposable
 	{
 		public bool IsListening
 		{
 			get { return _isListening; }
 		}
-		public TcpServerSettings Settings
+		public STcpServerSettings Settings
 		{
 			get { return _settings; }
 			set
 			{
-				if (value == null) _settings = new TcpServerSettings();
+				if (value == null) _settings = new STcpServerSettings();
 				else _settings = value;
 			}
 		}
 
-		public TcpServerEvents Events
+		public STcpServerEvents Events
 		{
 			get { return _events; }
 			set 
 			{
-				if (value == null) _events = new TcpServerEvents();
+				if (value == null) _events = new STcpServerEvents();
 				else _events = value;
 			}
 		}
@@ -42,8 +42,8 @@ namespace TcpServerClient
 		#region Private Member
 		private readonly string _header = "[TcpServer]";
 
-		private TcpServerEvents _events = new TcpServerEvents();
-		private TcpServerSettings _settings = new TcpServerSettings();
+		private STcpServerEvents _events = new STcpServerEvents();
+		private STcpServerSettings _settings = new STcpServerSettings();
 
 		private readonly string _listenerIp = null;
 		private readonly IPAddress _ipAddress = null;
@@ -63,7 +63,7 @@ namespace TcpServerClient
 		#endregion
 
 		#region Constructor
-		public TcpServer(string ipPort)
+		public STcpServer(string ipPort)
 		{
 			if (string.IsNullOrEmpty(ipPort)) throw new ArgumentNullException(nameof(ipPort));
 
@@ -332,14 +332,12 @@ namespace TcpServerClient
 			{
 				try
 				{
-					// Check if the client is disconnected.
 					if (!IsClientConnected(client.Client))
 					{
 						Logger?.Invoke($"{_header}client {ipPort} disconnected");
 						break;
 					}
 
-					// Check if a cancellation has been requested for the client's token.
 					if (client.Token.IsCancellationRequested)
 					{
 						Logger?.Invoke($"{_header}cancellation requested (data receiver for client {ipPort})");
@@ -416,25 +414,20 @@ namespace TcpServerClient
 		private async Task<ArraySegment<byte>> DataReadAsync(ClientMetadata client, CancellationToken token)
 		{
 			var buffer = new byte[_settings.StreamBufferSize];
-
-			// Variable to store the number of bytes read.
 			int read = 0;
 
-			// Create a MemoryStream to write the data read from the network stream.
+			// MemoryStream is fastest
 			using (MemoryStream ms = new MemoryStream())
 			{
-				// Keep reading data from the network stream until there is no more data.
 				while (true)
 				{
 					read = await client.NetworkStream.ReadAsync(buffer, 0, buffer.Length, token).ConfigureAwait(false);
 
-					// If data was read, write it to the MemoryStream and return it as an ArraySegment<byte>.
 					if (read > 0)
 					{
 						await ms.WriteAsync(buffer, 0, read, token).ConfigureAwait(false);
 						return new ArraySegment<byte>(ms.GetBuffer(), 0, (int)ms.Length);
 					}
-					// If no data was read, throw a SocketException.
 					else
 					{
 						throw new SocketException();
@@ -446,6 +439,7 @@ namespace TcpServerClient
 		private void SendInternal(string ipPort, long contentLength, Stream stream)
 		{
 			if (!_clients.TryGetValue(ipPort, out ClientMetadata client)) return;
+			// Client didn't connect
 			if (client == null) return;
 
 			long bytesRemaining = contentLength;
@@ -483,6 +477,7 @@ namespace TcpServerClient
 			try
 			{
 				if (!_clients.TryGetValue(ipPort, out client)) return;
+				// Client didn't connect
 				if (client == null) return;
 
 				long bytesRemaining = contentLength;

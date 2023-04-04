@@ -3,7 +3,7 @@
 	/// <summary>
 	/// SimpleTcp server events.
 	/// </summary>
-	public class TcpServerEvents
+	public class STcpServerEvents
 	{
 		#region Public-Members
 
@@ -34,7 +34,7 @@
 		/// <summary>
 		/// Instantiate the object.
 		/// </summary>
-		public TcpServerEvents()
+		public STcpServerEvents()
 		{
 
 		}
