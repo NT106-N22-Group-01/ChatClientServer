@@ -82,6 +82,7 @@ namespace TcpServerClient
 		private bool _isConnected = false;
 
 		private Task _dataReceiver = null;
+		private Task _connectionMonitor = null;
 		private CancellationTokenSource _tokenSource = new CancellationTokenSource();
 		private CancellationToken _token;
 		#endregion
@@ -157,6 +158,7 @@ namespace TcpServerClient
 			_isConnected = true;
 			_events.HandleConnected(this, new ConnectionEventArgs(ServerIpPort));
 			_dataReceiver = Task.Run(() => DataReceiver(_token), _token);
+			_connectionMonitor = Task.Run(ConnectedMonitor, _token);
 		}
 
 		public void Disconnect()
@@ -437,6 +439,58 @@ namespace TcpServerClient
 			catch (TaskCanceledException)
 			{
 				Logger?.Invoke("Awaiting a canceled task");
+			}
+		}
+
+		private async Task ConnectedMonitor()
+		{
+			while (!_token.IsCancellationRequested)
+			{
+				await Task.Delay(_settings.ConnectionLostEvaluationIntervalMs, _token).ConfigureAwait(false);
+
+				// If the client is not connected, continue monitoring
+				if (!_isConnected)
+					continue;
+
+				if (!PollSocket())
+				{
+					Logger?.Invoke($"{_header}disconnecting from {ServerIpPort} due to connection lost");
+					_isConnected = false;
+					_tokenSource.Cancel(); // DataReceiver will fire events including dispose
+				}
+			}
+		}
+
+		private bool PollSocket()
+		{
+			try
+			{
+				if (_client.Client == null || !_client.Client.Connected)
+					return false;
+
+				/* pear to the documentation on Poll:
+                 * When passing SelectMode.SelectRead as a parameter to the Poll method it will return 
+                 * -either- true if Socket.Listen(Int32) has been called and a connection is pending;
+                 * -or- true if data is available for reading; 
+                 * -or- true if the connection has been closed, reset, or terminated; 
+                 * otherwise, returns false
+                 */
+				if (!_client.Client.Poll(0, SelectMode.SelectRead))
+					return true;
+
+				// If the Poll method succeeded but there is no data available, the connection has been lost
+				var buff = new byte[1];
+				var clientSentData = _client.Client.Receive(buff, SocketFlags.Peek) != 0;
+				return clientSentData; //False here though Poll() succeeded means we had a disconnect!
+			}
+			catch (SocketException ex)
+			{
+				Logger?.Invoke($"{_header}poll socket from {ServerIpPort} failed with ex = {ex}");
+				return ex.SocketErrorCode == SocketError.TimedOut;
+			}
+			catch (Exception)
+			{
+				return false;
 			}
 		}
 	}
