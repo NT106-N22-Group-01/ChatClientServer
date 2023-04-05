@@ -84,8 +84,6 @@ namespace TcpServerClient
 		private Task _dataReceiver = null;
 		private CancellationTokenSource _tokenSource = new CancellationTokenSource();
 		private CancellationToken _token;
-
-		private bool _isTimeout = false;
 		#endregion
 
 		#region Constructors-and-Factories
@@ -157,7 +155,6 @@ namespace TcpServerClient
 
 			// Set the connected and timeout flags, raise the Connected event, and start the DataReceiver task
 			_isConnected = true;
-			_isTimeout = false;
 			_events.HandleConnected(this, new ConnectionEventArgs(ServerIpPort));
 			_dataReceiver = Task.Run(() => DataReceiver(_token), _token);
 		}
@@ -202,7 +199,7 @@ namespace TcpServerClient
 			if (!_isConnected) throw new IOException("Not connected to the server; use Connect() first.");
 
 			SendInternal(contentLength, stream);
-		}
+		} 
 
 		public async Task SendAsync(long contentLength, Stream stream, CancellationToken token = default)
 		{
@@ -264,14 +261,7 @@ namespace TcpServerClient
 						{
 
 							Action action = () => _events.HandleDataReceived(this, new DataReceivedEventArgs(ServerIpPort, data));
-							if (_settings.UseAsyncDataReceivedEvents)
-							{
-								_ = Task.Run(action, token);
-							}
-							else
-							{
-								action.Invoke();
-							}
+							_ = Task.Run(action, token);
 							return data;
 						}
 						else
@@ -301,9 +291,7 @@ namespace TcpServerClient
 			Logger?.Invoke($"{_header}disconnection detected");
 
 			_isConnected = false;
-
-			if (!_isTimeout) _events.HandleClientDisconnected(this, new ConnectionEventArgs(ServerIpPort));
-			// else _events.HandleClientDisconnected(this, new ConnectionEventArgs(ServerIpPort, DisconnectReason.Timeout)); To Do
+			_events.HandleClientDisconnected(this, new ConnectionEventArgs(ServerIpPort));
 
 			Dispose();
 		}
