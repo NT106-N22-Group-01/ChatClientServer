@@ -1,47 +1,20 @@
 ﻿namespace TcpServerClient
 {
-	/// <summary>
-	/// SimpleTcp server events.
-	/// </summary>
 	public class STcpServerEvents
 	{
-		#region Public-Members
-
-		/// <summary>
-		/// Event to call when a client connects.
-		/// </summary>
 		public event EventHandler<ConnectionEventArgs> ClientConnected;
 
-		/// <summary>
-		/// Event to call when a client disconnects.
-		/// </summary>
 		public event EventHandler<ConnectionEventArgs> ClientDisconnected;
 
-		/// <summary>
-		/// Event to call when byte data has become available from the client.
-		/// </summary>
 		public event EventHandler<DataReceivedEventArgs> DataReceived;
 
-		/// <summary>
-		/// Event to call when byte data has been sent to a client.
-		/// </summary>
 		public event EventHandler<DataSentEventArgs> DataSent;
 
-		#endregion
 
-		#region Constructors-and-Factories
-
-		/// <summary>
-		/// Instantiate the object.
-		/// </summary>
 		public STcpServerEvents()
 		{
 
 		}
-
-		#endregion
-
-		#region Public-Methods
 
 		internal void HandleClientConnected(object sender, ConnectionEventArgs args)
 		{
@@ -62,7 +35,5 @@
 		{
 			DataSent?.Invoke(sender, args);
 		}
-
-		#endregion
 	}
 }

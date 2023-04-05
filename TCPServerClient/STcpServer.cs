@@ -50,7 +50,6 @@ namespace TcpServerClient
 		private readonly int _port = 0;
 
 		private readonly ConcurrentDictionary<string, ClientMetadata> _clients = new ConcurrentDictionary<string, ClientMetadata>();
-		private readonly ConcurrentDictionary<string, DateTime> _clientsKicked = new ConcurrentDictionary<string, DateTime>();
 
 		private TcpListener _listener;
 		private bool _isListening = false;
@@ -107,7 +106,6 @@ namespace TcpServerClient
 			if (_isListening) throw new InvalidOperationException("TcpServer is already running.");
 
 			_listener = new TcpListener(_ipAddress, _port);
-			_listener.Server.NoDelay = true;
 
 			_listener.Start();
 			_isListening = true;
@@ -125,7 +123,7 @@ namespace TcpServerClient
 			if (_isListening) throw new InvalidOperationException("");
 
 			_listener = new TcpListener(IPAddress.Any, _port);
-			_listener.Server.NoDelay = _settings.NoDelay;
+			_listener.Server.NoDelay = true;
 			_listener.Start();
 			_isListening = true;
 
@@ -170,37 +168,10 @@ namespace TcpServerClient
 
 			await SendInternalAsync(ipPort, contentLength, stream, token).ConfigureAwait(false);
 		}
-
-		public void DisconnectClient(string ipPort)
-		{
-			if (string.IsNullOrEmpty(ipPort)) throw new ArgumentNullException(nameof(ipPort));
-
-			if (!_clients.TryGetValue(ipPort, out ClientMetadata client))
-			{
-				Logger?.Invoke($"{_header}unable to find client: {ipPort}");
-			}
-			else
-			{
-				Logger?.Invoke($"{_header}kicking: {ipPort}");
-				_clientsKicked.TryAdd(ipPort, DateTime.Now);
-			}
-
-			if (client != null)
-			{
-				if (!client.TokenSource.IsCancellationRequested)
-				{
-					client.TokenSource.Cancel();
-					Logger?.Invoke($"{_header}requesting disposal of: {ipPort}");
-				}
-
-				client.Dispose();
-			}
-		}
 		#endregion
 
 		private bool IsClientConnected(TcpClient client)
 		{
-			// Check whether the client is connected.
 			if (!client.Connected)
 			{
 				return false;
@@ -235,10 +206,10 @@ namespace TcpServerClient
 			{
 				if (_clients != null)
 				{
-					foreach (KeyValuePair<string, ClientMetadata> curr in _clients)
+					foreach (var (key, value) in _clients)
 					{
-						curr.Value.Dispose();
-						Logger?.Invoke($"{_header}disconnected client: {curr.Key}");
+						value.Dispose();
+						Logger?.Invoke($"{_header}disconnected client: {key}");
 					}
 
 					_clients.Clear();
@@ -265,7 +236,7 @@ namespace TcpServerClient
 		{
 			while (!_listenerToken.IsCancellationRequested)
 			{
-				ClientMetadata client = null;
+				ClientMetadata clientMetadata = null;
 
 				try
 				{
@@ -283,16 +254,16 @@ namespace TcpServerClient
 					Util.ParseIpPort(clientIpPort, out var clientIp, out var clientPort);
 
 					// Create a new ClientMetadata object to store information about the client connection.
-					client = new ClientMetadata(tcpClient);
-					_clients.TryAdd(clientIpPort, client);
+					clientMetadata = new ClientMetadata(tcpClient);
+					_clients.TryAdd(clientIpPort, clientMetadata);
 
 					Logger?.Invoke($"{_header}starting data receiver for: {clientIpPort}");
 					_events.HandleClientConnected(this, new ConnectionEventArgs(clientIpPort));
 
 					// Create a new cancellation token that is linked to the client's cancellation token and the server's cancellation token.
-					var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(client.Token, _token);
+					var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(clientMetadata.Token, _token);
 
-					Task unawaited = Task.Run(() => DataReceiver(client), linkedCts.Token);
+					Task unawaited = Task.Run(() => DataReceiver(clientMetadata), linkedCts.Token);
 				}
 				catch (Exception ex) when (ex is TaskCanceledException
 									|| ex is OperationCanceledException
@@ -302,7 +273,7 @@ namespace TcpServerClient
 					// The operation was cancelled, an object was disposed of, or an invalid operation was performed.
 					// Stop listening and dispose of the client.
 					_isListening = false;
-					client?.Dispose();
+					clientMetadata?.Dispose();
 					Logger?.Invoke($"{_header}stopped listening");
 					break;
 				}
@@ -310,7 +281,7 @@ namespace TcpServerClient
 				{
 					// An exception occurred while awaiting incoming connections.
 					// Dispose of the client and log the exception.
-					client?.Dispose();
+					clientMetadata?.Dispose();
 					Logger?.Invoke($"{_header}exception while awaiting connections: {ex}");
 				}
 			}
@@ -327,7 +298,6 @@ namespace TcpServerClient
 			// Create a cancellation token source that links to the cancellation tokens for the overall task and the client.
 			CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_token, client.Token);
 
-			// Loop indefinitely while receiving data from the client.
 			while (true)
 			{
 				try
@@ -353,19 +323,9 @@ namespace TcpServerClient
 						continue;
 					}
 
-					// Create an action to handle the received data and the client's IP and port.
-					Action action = () => _events.HandleDataReceived(this, new DataReceivedEventArgs(ipPort, data));
-
-					// If asynchronous data received events are enabled, start a new task to handle the action.
-					if (_settings.UseAsyncDataReceivedEvents)
-					{
-						_ = Task.Run(action, linkedCts.Token);
-					}
-					// Otherwise, handle the action synchronously.
-					else
-					{
-						action.Invoke();
-					}
+					_ = Task.Run(() => 
+						_events.HandleDataReceived(this, new DataReceivedEventArgs(ipPort, data)),
+						linkedCts.Token);
 				}
 				catch (IOException)
 				{
@@ -396,15 +356,7 @@ namespace TcpServerClient
 
 			Logger?.Invoke($"{_header}data receiver terminated for client {ipPort}");
 
-			if (_clientsKicked.ContainsKey(ipPort))
-			{
-				_events.HandleClientDisconnected(this, new ConnectionEventArgs(ipPort));
-			}
-			else
-			{
-				_events.HandleClientDisconnected(this, new ConnectionEventArgs(ipPort));
-			}
-
+			_events.HandleClientDisconnected(this, new ConnectionEventArgs(ipPort));
 
 			_clients.TryRemove(ipPort, out _);
 
