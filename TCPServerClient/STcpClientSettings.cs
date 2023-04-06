@@ -2,18 +2,6 @@
 {
 	public class STcpClientSettings
 	{
-		public bool NoDelay
-		{
-			get
-			{
-				return _noDelay;
-			}
-			set
-			{
-				_noDelay = value;
-			}
-		}
-
 		public int StreamBufferSize
 		{
 			get

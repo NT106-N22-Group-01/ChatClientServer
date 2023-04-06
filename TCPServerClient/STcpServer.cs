@@ -148,25 +148,36 @@ namespace TcpServerClient
 
 		}
 
-		public void Send(string ipPort, long contentLength, Stream stream)
+		public void Send(string ipPort, byte[] data)
 		{
 			if (string.IsNullOrEmpty(ipPort)) throw new ArgumentNullException(nameof(ipPort));
-			if (contentLength < 1) return;
-			if (stream == null) throw new ArgumentNullException(nameof(stream));
-			if (!stream.CanRead) throw new InvalidOperationException("Cannot read from supplied stream.");
+			if (data == null || data.Length < 1) throw new ArgumentNullException(nameof(data));
 
-			SendInternal(ipPort, contentLength, stream);
+			using (MemoryStream ms = new MemoryStream())
+			{
+				ms.Write(data, 0, data.Length);
+				ms.Seek(0, SeekOrigin.Begin);
+				SendInternal(ipPort, data.Length, ms);
+			}
 		}
-
-		public async Task SendAsync(string ipPort, long contentLength, Stream stream, CancellationToken token = default)
+		public async Task SendAsync(string ipPort, byte[] data, CancellationToken token = default)
 		{
 			if (string.IsNullOrEmpty(ipPort)) throw new ArgumentNullException(nameof(ipPort));
-			if (contentLength < 1) return;
-			if (stream == null) throw new ArgumentNullException(nameof(stream));
-			if (!stream.CanRead) throw new InvalidOperationException("Cannot read from supplied stream.");
+			if (data == null || data.Length < 1) throw new ArgumentNullException(nameof(data));
 			if (token == default(CancellationToken)) token = _token;
 
-			await SendInternalAsync(ipPort, contentLength, stream, token).ConfigureAwait(false);
+			using (MemoryStream ms = new MemoryStream())
+			{
+				await ms.WriteAsync(data, 0, data.Length, token).ConfigureAwait(false);
+				ms.Seek(0, SeekOrigin.Begin);
+				await SendInternalAsync(ipPort, data.Length, ms, token).ConfigureAwait(false);
+			}
+		}
+
+		public IEnumerable<string> GetClients()
+		{
+			List<string> clients = new List<string>(_clients.Keys);
+			return clients;
 		}
 		#endregion
 
@@ -249,9 +260,7 @@ namespace TcpServerClient
 
 					var tcpClient = await _listener.AcceptTcpClientAsync().ConfigureAwait(false);
 
-					// Extract the client IP address and port number from the remote endpoint.
 					var clientIpPort = tcpClient.Client.RemoteEndPoint.ToString();
-					Util.ParseIpPort(clientIpPort, out var clientIp, out var clientPort);
 
 					// Create a new ClientMetadata object to store information about the client connection.
 					clientMetadata = new ClientMetadata(tcpClient);
