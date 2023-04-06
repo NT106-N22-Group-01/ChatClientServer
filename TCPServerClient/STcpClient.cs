@@ -126,8 +126,7 @@ namespace TcpServerClient
 
 			// Connect to the server and log a message
 			Logger?.Invoke($"{_header}connecting to {ServerIpPort}");
-			var asyncResult = _client.BeginConnect(_serverIp, _serverPort, null, null);
-			var waitHandle = asyncResult.AsyncWaitHandle;
+			IAsyncResult asyncResult = _client.BeginConnect(_serverIp, _serverPort, null, _client);
 
 			// Register a callback to close the network stream if the cancellation token is canceled
 			_tokenSource = new CancellationTokenSource();
@@ -138,7 +137,9 @@ namespace TcpServerClient
 			try
 			{
 				// Wait for a connection response or timeout
-				if (!waitHandle.WaitOne(TimeSpan.FromMilliseconds(_settings.ConnectTimeoutMs), false))
+				var check = asyncResult.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(10));
+				// IDK why if connect to loopback IP will alway return true
+				if (!check)
 				{
 					// Close the client and throw a TimeoutException if the connection times out
 					_client.Close();
@@ -146,10 +147,14 @@ namespace TcpServerClient
 				}
 
 				// Finish the connection and get the network stream
-				_client.EndConnect(asyncResult);
+				_client?.EndConnect(asyncResult);
 				_networkStream = _client.GetStream();
 			}
-			catch (Exception)
+			catch (SocketException)
+			{
+				throw;
+			}
+			catch
 			{
 				throw;
 			}
