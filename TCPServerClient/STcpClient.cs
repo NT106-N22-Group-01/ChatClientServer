@@ -193,25 +193,31 @@ namespace TcpServerClient
 			_isConnected = false;
 		}
 
-		public void Send(long contentLength, Stream stream)
+		public void Send(byte[] data)
 		{
-			if (contentLength < 1) return;
-			if (stream == null) throw new ArgumentNullException(nameof(stream));
-			if (!stream.CanRead) throw new InvalidOperationException("Cannot read from supplied stream.");
+			if (data == null || data.Length < 1) throw new ArgumentNullException(nameof(data));
 			if (!_isConnected) throw new IOException("Not connected to the server; use Connect() first.");
 
-			SendInternal(contentLength, stream);
-		} 
+			using (MemoryStream ms = new MemoryStream())
+			{
+				ms.Write(data, 0, data.Length);
+				ms.Seek(0, SeekOrigin.Begin);
+				SendInternal(data.Length, ms);
+			}
+		}
 
-		public async Task SendAsync(long contentLength, Stream stream, CancellationToken token = default)
+		public async Task SendAsync(byte[] data, CancellationToken token = default)
 		{
-			if (contentLength < 1) return;
-			if (stream == null) throw new ArgumentNullException(nameof(stream));
-			if (!stream.CanRead) throw new InvalidOperationException("Cannot read from supplied stream.");
+			if (data == null || data.Length < 1) throw new ArgumentNullException(nameof(data));
 			if (!_isConnected) throw new IOException("Not connected to the server; use Connect() first.");
 			if (token == default(CancellationToken)) token = _token;
 
-			await SendInternalAsync(contentLength, stream, token).ConfigureAwait(false);
+			using (MemoryStream ms = new MemoryStream())
+			{
+				await ms.WriteAsync(data, 0, data.Length, token).ConfigureAwait(false);
+				ms.Seek(0, SeekOrigin.Begin);
+				await SendInternalAsync(data.Length, ms, token).ConfigureAwait(false);
+			}
 		}
 		#endregion
 
