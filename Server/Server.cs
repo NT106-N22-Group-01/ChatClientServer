@@ -3,6 +3,7 @@ using System.Windows.Forms;
 using TcpServerClient;
 using Data;
 using System.Collections.Concurrent;
+using System.Threading.Tasks;
 
 namespace Server
 {
@@ -47,6 +48,9 @@ namespace Server
 				serverStopButton.Enabled = true;
 				_updateStatusDelegate = new UpdateStatusDelegate(this.UpdateStatus);
 				this?.Invoke(_updateStatusDelegate, new object[] { $"Đang nghe tại port {portNumber}" });
+				_server.Events.DataReceived += DataReceived;
+				_server.Events.ClientDisconnected += ClientDisconnected;
+				_server.Logger = Logger;
 			}
 			catch (Exception ex)
 			{
@@ -56,8 +60,12 @@ namespace Server
 
 		private void serverStopButton_Click(object sender, EventArgs e)
 		{
-			_server.Stop();
-			_server = null;
+			Task.Run(() =>
+			{
+				_server.Stop();
+				_server.Dispose();
+				_server = null;
+			});
 			serverStartButton.Enabled = true;
 			serverStopButton.Enabled = false;
 			this.Invoke(_updateStatusDelegate, new object[] { "Dừng server" });
@@ -68,11 +76,13 @@ namespace Server
 			Object packet = Common.ArraySegmentToObject(e.Data);
 			if (packet is UserConnectionPacket ucp)
 			{
-				_usernames.TryAdd(e.IpPort, ucp.Username);
+				// Move to top to don't send send to Joining client
 				SendToClient(e.Data);
-				this.Invoke(_updateStatusDelegate, new Object[] { $"---- {ucp.Username} vừa tham gia vào phòng chat ---" });
+				_usernames.TryAdd(e.IpPort, ucp.Username);
+				this.Invoke(_updateStatusDelegate, new Object[] { $"--- {ucp.Username} vừa tham gia vào phòng chat ---" });
+				
 			}
-			if (packet is ChatPacket chat)
+			else if (packet is ChatPacket chat)
 			{
 				SendToClient(e.Data);
 				this.Invoke(_updateStatusDelegate, new Object[] { $"{chat.Username} => {chat.ChatMessage}" });
@@ -81,7 +91,10 @@ namespace Server
 
 		private void ClientDisconnected(object sender, ConnectionEventArgs e) 
 		{
+			if (_server == null) return;
 			if (!_usernames.TryGetValue(e.IpPort, out var username)) return;
+
+			_usernames.TryRemove(e.IpPort, out _);
 
 			UserConnectionPacket ucp = new UserConnectionPacket();
 
@@ -101,6 +114,10 @@ namespace Server
 					_ = _server.SendAsync(ipPort, data.ToArray());
 				}
 			}
+			catch (NullReferenceException)
+			{
+				throw;
+			}
 			catch (Exception ex)
 			{
 				MessageBox.Show("Send Error: " + ex.Message, "Tcp Server", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -110,6 +127,11 @@ namespace Server
 		private void UpdateStatus(string status)
 		{
 			serverChatView.Text += status + Environment.NewLine;
+		}
+
+		void Logger(string msg)
+		{
+			this.Invoke(_updateStatusDelegate, new object[] { msg });
 		}
 	}
 }
