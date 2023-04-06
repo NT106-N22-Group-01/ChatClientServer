@@ -18,6 +18,7 @@ namespace Server
 		{
 			InitializeComponent();
 			serverStopButton.Enabled = false;
+			serverChatView.Enabled = false;
 		}
 
 		private void serverStartButton_Click(object sender, EventArgs e)
