@@ -7,6 +7,8 @@
 
 		public event EventHandler<ConnectionEventArgs> Disconnected;
 
+		public event EventHandler<ConnectionEventArgs> ServerDisconnected;
+
 		public event EventHandler<DataReceivedEventArgs> DataReceived;
 
 		public event EventHandler<DataSentEventArgs> DataSent;
@@ -24,6 +26,11 @@
 		internal void HandleClientDisconnected(object sender, ConnectionEventArgs args)
 		{
 			Disconnected?.Invoke(sender, args);
+		}
+
+		internal void HandleClientServerDisconnected(object sender, ConnectionEventArgs args)
+		{
+			ServerDisconnected?.Invoke(sender, args);
 		}
 
 		internal void HandleDataReceived(object sender, DataReceivedEventArgs args)

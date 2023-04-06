@@ -40,7 +40,7 @@ namespace TcpServerClient
 		public Action<string> Logger = null;
 
 		#region Private Member
-		private readonly string _header = "[TcpServer]";
+		private readonly string _header = "[TcpServer] ";
 
 		private STcpServerEvents _events = new STcpServerEvents();
 		private STcpServerSettings _settings = new STcpServerSettings();

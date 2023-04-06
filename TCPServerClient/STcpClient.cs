@@ -303,8 +303,15 @@ namespace TcpServerClient
 
 			Logger?.Invoke($"{_header}disconnection detected");
 
-			_isConnected = false;
-			_events.HandleClientDisconnected(this, new ConnectionEventArgs(ServerIpPort));
+			if (_isConnected)
+			{
+				_events.HandleClientServerDisconnected(this, new ConnectionEventArgs(ServerIpPort));
+			}
+			else
+			{
+				_isConnected = false;
+				_events.HandleClientDisconnected(this, new ConnectionEventArgs(ServerIpPort));
+			}
 
 			Dispose();
 		}
